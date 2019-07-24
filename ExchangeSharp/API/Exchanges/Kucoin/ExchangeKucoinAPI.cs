@@ -199,8 +199,9 @@ namespace ExchangeSharp
             JToken token = await MakeJsonRequestAsync<JToken>("/orders?status=active&symbol=" + marketSymbol);
             foreach (JToken trade in token)
             {
-                trades.Add(trade.ParseTrade("size", "price", "side", "time", TimestampType.UnixMilliseconds));
-            }
+                trades.Add(trade.ParseTrade("size", "price", "side", "time", TimestampType.UnixMilliseconds, idKey: "tradeId"));
+
+			}
             return trades;
         }
 
@@ -210,7 +211,7 @@ namespace ExchangeSharp
             JToken token = await MakeJsonRequestAsync<JToken>("/market/histories?symbol=" + marketSymbol + (startDate == null ? string.Empty : "&since=" + startDate.Value.UnixTimestampFromDateTimeMilliseconds()));
             foreach (JObject trade in token)
             {
-                trades.Add(trade.ParseTrade("size", "price", "side", "time", TimestampType.UnixMilliseconds));
+                trades.Add(trade.ParseTrade("size", "price", "side", "time", TimestampType.UnixMilliseconds, idKey: "tradeId"));
             }
             var rc = callback?.Invoke(trades);
         }
@@ -445,7 +446,7 @@ namespace ExchangeSharp
                 );
         }
 
-        protected override IWebSocket OnGetTradesWebSocket(Action<KeyValuePair<string, ExchangeTrade>> callback, params string[] marketSymbols)
+        protected override IWebSocket OnGetTradesWebSocket(Func<KeyValuePair<string, ExchangeTrade>, Task> callback, params string[] marketSymbols)
         {
 			//{
 			//  "id":"5c24c5da03aa673885cd67aa",
@@ -468,7 +469,7 @@ namespace ExchangeSharp
 			//}
             var websocketUrlToken = GetWebsocketBulletToken();
 			return ConnectWebSocket(
-                    $"?token={websocketUrlToken}", (_socket, msg) =>
+                    $"?token={websocketUrlToken}", async (_socket, msg) =>
 
 					{
                         JToken token = JToken.Parse(msg.ToStringFromUTF8());
@@ -477,15 +478,13 @@ namespace ExchangeSharp
                             var dataToken = token["data"];
 							var marketSymbol = token["data"]["symbol"].ToStringInvariant();
                             var trade = dataToken.ParseTrade(amountKey: "size", priceKey: "price", typeKey: "side",
-                                timestampKey: "time", TimestampType.UnixNanoseconds); // idKey: "tradeId");
-																					   // one day, if ExchangeTrade.Id is converted to string, then the above can be uncommented
-							callback(new KeyValuePair<string, ExchangeTrade>(marketSymbol, trade));
+                                timestampKey: "time", TimestampType.UnixNanoseconds, idKey: "tradeId");
+							await callback(new KeyValuePair<string, ExchangeTrade>(marketSymbol, trade));
                         }
 						else if (token["type"].ToStringInvariant() == "error")
 						{
 							Logger.Info(token["data"].ToStringInvariant());
 						}
-						return Task.CompletedTask;
                     }, async (_socket) =>
                     {
 						List<string> marketSymbolsList = new List<string>(marketSymbols == null || marketSymbols.Length == 0 ? 
@@ -596,7 +595,7 @@ namespace ExchangeSharp
                 Price = token["price"].ConvertInvariant<decimal>(),
                 AveragePrice = token["price"].ConvertInvariant<decimal>(),
                 //Message = string.Format("Original Order ID: {0}", token["orderOid"].ToStringInvariant()),           // each new order is given an order ID. As it is filled, possibly across multipl orders, a new oid is created. Here we put the orginal orderid
-                Fees = decimal.Parse(token["fee"].ToStringInvariant(), System.Globalization.NumberStyles.Float),     // returned with exponent so have to parse
+                Fees = token["fee"].ConvertInvariant<decimal>(), // ConvertInvariant handles exponent now
                 OrderDate = DateTimeOffset.FromUnixTimeMilliseconds(token["createdAt"].ConvertInvariant<long>()).DateTime
 
             };

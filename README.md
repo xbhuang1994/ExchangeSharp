@@ -23,12 +23,12 @@ The following cryptocurrency exchanges are supported:
 | Bitfinex         | x         | x           | TRO       |
 | Bithumb          | x         |             |           |
 | BitMEX           | x         | x           | RO        |
-| Bitstamp         | x         | x           |           |
+| Bitstamp         | x         | x           | R         |
 | Bittrex          | x         | x           | TR        |
 | Bleutrade        | x         | x           |           |
 | Coinbase         | x         | x           | TR        |
 | Cryptopia        | x         | x           |           |
-| Gemini           | x         | x           |           |
+| Gemini           | x         | x           | R         |
 | Hitbtc           | x         | x           |           |
 | Huobi            | x         | x           | RB        |
 | Kraken           | x         | x           |           |

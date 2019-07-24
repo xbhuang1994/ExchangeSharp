@@ -262,7 +262,7 @@ namespace ExchangeSharp
             });
         }
 
-        protected override IWebSocket OnGetTradesWebSocket(Action<KeyValuePair<string, ExchangeTrade>> callback, params string[] marketSymbols)
+        protected override IWebSocket OnGetTradesWebSocket(Func<KeyValuePair<string, ExchangeTrade>, Task> callback, params string[] marketSymbols)
         {
             /*
 	    {
@@ -285,7 +285,7 @@ namespace ExchangeSharp
                 marketSymbols = GetMarketSymbolsAsync().Sync().ToArray();
             }
             string url = GetWebSocketStreamUrlForSymbols("@aggTrade", marketSymbols);
-            return ConnectWebSocket(url, (_socket, msg) =>
+            return ConnectWebSocket(url, async (_socket, msg) =>
             {
                 JToken token = JToken.Parse(msg.ToStringFromUTF8());
                 string name = token["stream"].ToStringInvariant();
@@ -294,8 +294,7 @@ namespace ExchangeSharp
 
                 // buy=0 -> m = true (The buyer is maker, while the seller is taker).
                 // buy=1 -> m = false(The seller is maker, while the buyer is taker).
-                callback(new KeyValuePair<string, ExchangeTrade>(marketSymbol, token.ParseTrade("q", "p", "m", "E", TimestampType.UnixMilliseconds, "a", "false")));
-                return Task.CompletedTask;
+                await callback(new KeyValuePair<string, ExchangeTrade>(marketSymbol, token.ParseTrade("q", "p", "m", "E", TimestampType.UnixMilliseconds, "a", "false")));
             });
         }
 
@@ -391,12 +390,13 @@ namespace ExchangeSharp
                 foreach (var token in obj)
                 {
                     var trade = token.ParseTrade("q", "p", "m", "T", TimestampType.UnixMilliseconds, "a", "false");
-                    if (trade.Id < fromId) continue;
-                    if (trade.Id > endId) continue;
-                    if (!processedIds.Add(trade.Id)) continue;
+					long tradeId = (long)trade.Id.ConvertInvariant<ulong>();
+					if (tradeId < fromId) continue;
+                    if (tradeId > endId) continue;
+                    if (!processedIds.Add(tradeId)) continue;
 
                     trades.Add(trade);
-                    fromId = trade.Id;
+                    fromId = tradeId;
                 }
 
                 fromId++;
@@ -478,7 +478,7 @@ namespace ExchangeSharp
             payload["symbol"] = order.MarketSymbol;
             payload["side"] = order.IsBuy ? "BUY" : "SELL";
             if (order.OrderType == OrderType.Stop)
-                payload["type"] = "STOP_LOOSE";//if order type is stop loose/limit, then binance expect word 'STOP_LOOSE' inestead of 'STOP'
+                payload["type"] = "STOP_LOSS";//if order type is stop loss/limit, then binance expect word 'STOP_LOSS' inestead of 'STOP'
             else
                 payload["type"] = order.OrderType.ToStringUpperInvariant();
 

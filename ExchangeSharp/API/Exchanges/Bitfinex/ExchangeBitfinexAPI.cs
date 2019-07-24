@@ -251,14 +251,14 @@ namespace ExchangeSharp
             });
         }
 
-        protected override IWebSocket OnGetTradesWebSocket(Action<KeyValuePair<string, ExchangeTrade>> callback, params string[] marketSymbols)
+        protected override IWebSocket OnGetTradesWebSocket(Func<KeyValuePair<string, ExchangeTrade>, Task> callback, params string[] marketSymbols)
         {
             Dictionary<int, string> channelIdToSymbol = new Dictionary<int, string>();
 			if (marketSymbols == null || marketSymbols.Length == 0)
 			{
 				marketSymbols = GetMarketSymbolsAsync().Sync().ToArray();
 			}
-            return ConnectWebSocket("/2", (_socket, msg) => //use websocket V2 (beta, but millisecond timestamp)
+            return ConnectWebSocket("/2", async (_socket, msg) => //use websocket V2 (beta, but millisecond timestamp)
             {
                 JToken token = JToken.Parse(msg.ToStringFromUTF8());
                 if (token is JArray array)
@@ -278,7 +278,7 @@ namespace ExchangeSharp
                                 ExchangeTrade trade = ParseTradeWebSocket(token.Last);
                                 if (trade != null)
                                 {
-                                    callback(new KeyValuePair<string, ExchangeTrade>(symbol, trade));
+                                    await callback(new KeyValuePair<string, ExchangeTrade>(symbol, trade));
                                 }
                             }
                         }
@@ -300,7 +300,7 @@ namespace ExchangeSharp
 										{
 											trade.Flags |= ExchangeTradeFlags.IsLastFromSnapshot;
 										}
-										callback(new KeyValuePair<string, ExchangeTrade>(symbol, trade));
+										await callback(new KeyValuePair<string, ExchangeTrade>(symbol, trade));
 									}
 								}
 							}
@@ -313,7 +313,6 @@ namespace ExchangeSharp
                     int channelId = token["chanId"].ConvertInvariant<int>();
                     channelIdToSymbol[channelId] = token["pair"].ToStringInvariant();
                 }
-                return Task.CompletedTask;
             }, async (_socket) =>
             {
 				foreach (var marketSymbol in marketSymbols)
@@ -328,7 +327,7 @@ namespace ExchangeSharp
             decimal amount = token[2].ConvertInvariant<decimal>();
             return new ExchangeTrade
             {
-                Id = token[0].ConvertInvariant<int>(),
+                Id = token[0].ToStringInvariant(),
                 Timestamp = CryptoUtility.UnixTimeStampToDateTimeMilliseconds(token[1].ConvertInvariant<long>()),
                 Amount = Math.Abs(amount),
                 IsBuy = amount > 0,
@@ -380,7 +379,7 @@ namespace ExchangeSharp
                 }
                 foreach (decimal[] tradeChunkPiece in tradeChunk)
                 {
-                    trades.Add(new ExchangeTrade { Amount = Math.Abs(tradeChunkPiece[2]), IsBuy = tradeChunkPiece[2] > 0m, Price = tradeChunkPiece[3], Timestamp = CryptoUtility.UnixTimeStampToDateTimeMilliseconds((double)tradeChunkPiece[1]), Id = (long)tradeChunkPiece[0] });
+                    trades.Add(new ExchangeTrade { Amount = Math.Abs(tradeChunkPiece[2]), IsBuy = tradeChunkPiece[2] > 0m, Price = tradeChunkPiece[3], Timestamp = CryptoUtility.UnixTimeStampToDateTimeMilliseconds((double)tradeChunkPiece[1]), Id = tradeChunkPiece[0].ToStringInvariant() });
                 }
                 trades.Sort((t1, t2) => t1.Timestamp.CompareTo(t2.Timestamp));
                 if (!callback(trades))

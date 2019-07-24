@@ -178,21 +178,20 @@ namespace ExchangeSharp
             return tickers;
         }
 
-        protected override IWebSocket OnGetTradesWebSocket(Action<KeyValuePair<string, ExchangeTrade>> callback, params string[] marketSymbols)
+        protected override IWebSocket OnGetTradesWebSocket(Func<KeyValuePair<string, ExchangeTrade>, Task> callback, params string[] marketSymbols)
         {
 			/*
 			 request:
-			{"op": "subscribe", "args": ["swap/trade:BTC-USD-SWAP"]}
+			{"op": "subscribe", "args": ["spot/trade:BTC-USD"]}
 			*/
 
 			return ConnectWebSocketOkex(async (_socket) =>
 				{
-					marketSymbols = await AddMarketSymbolsToChannel(_socket, "swap/trade:{0}-SWAP", marketSymbols);
-				}, (_socket, symbol, sArray, token) =>
+					marketSymbols = await AddMarketSymbolsToChannel(_socket, "spot/trade:{0}", marketSymbols);
+				}, async (_socket, symbol, sArray, token) =>
 				{
 					ExchangeTrade trade = ParseTradeWebSocket(token);
-					callback(new KeyValuePair<string, ExchangeTrade>(symbol, trade));
-					return Task.CompletedTask;
+					await callback(new KeyValuePair<string, ExchangeTrade>(symbol, trade));
 				});
         }
 
@@ -580,7 +579,7 @@ namespace ExchangeSharp
 
 			return new ExchangeTrade
 			  {
-				  Id = token["trade_id"].ConvertInvariant<long>(),
+				  Id = token["trade_id"].ToStringInvariant(),
 				  Price = token["price"].ConvertInvariant<decimal>(),
 				  Amount = token["size"].ConvertInvariant<decimal>(),
 				  Timestamp = DateTime.Parse(token["timestamp"].ToStringInvariant()),
@@ -608,7 +607,7 @@ namespace ExchangeSharp
 	                {
 		                return;
 	                }
-					 }
+				}
 
                 if (token["table"] != null)
                 {
@@ -617,7 +616,7 @@ namespace ExchangeSharp
 	                {
 		                var marketSymbol = dataRow["instrument_id"].ToStringInvariant().Replace("-SWAP", string.Empty);
 		                await callback(_socket, marketSymbol, null, dataRow);
-						 }
+					}
                 }
             }, async (_socket) =>
             {
